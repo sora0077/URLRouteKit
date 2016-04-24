@@ -9,15 +9,21 @@ XCPlaygroundPage.currentPage.needsIndefiniteExecution = true
 
 let router = Router(.Serial)
 
+var id = 0
 router.register("^/users/(?<user_id>[0-9]+)$") { url, options, animated in
     
     url
     options
     animated
     return Response { completion in
-        let when = dispatch_time(DISPATCH_TIME_NOW, Int64(3.0 * Double(NSEC_PER_SEC)))
+        let when = dispatch_time(DISPATCH_TIME_NOW, Int64(1.0 * Double(NSEC_PER_SEC)))
         dispatch_after(when, dispatch_get_main_queue()) {
-            completion(.URL(NSURL(string: "/twitter/")!, animated: animated))
+            if id > 10 {
+                completion(nil)
+            } else {
+                id += 1
+                completion(.URL(NSURL(string: "/users/\(id)")!, animated: animated))
+            }
         }
     }
 }
@@ -32,6 +38,7 @@ router.register("^/(?<sns_type>(twitter|facebook))$") { url, options, animated i
 
 router.registerError { error in
     print(error)
+    return nil
 }
 
 router.openURL(NSURL(string: "/twitter/")!)

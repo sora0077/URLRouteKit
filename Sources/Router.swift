@@ -28,7 +28,7 @@ public final class Router {
     public typealias Handler = (url: NSURL, options: [String: String], animated: Bool) throws -> Response
     
     private var routes: [String: Handler] = [:]
-    private var errorHandler: (ErrorType -> Void)?
+    private var errorHandler: (ErrorType -> Response)?
     
     private var cache: [String: (Handler, [String: String])] = [:]
     private var regexCache: [String: NameCaptureRegex] = [:]
@@ -51,7 +51,7 @@ public extension Router {
         routes[path] = handler
     }
     
-    func registerError(handler: ErrorType -> Void) {
+    func registerError(handler: ErrorType -> Response) {
         assert(errorHandler == nil)
         errorHandler = handler
     }
@@ -67,6 +67,10 @@ public extension Router {
     }
     
     func openURL(url: NSURL, animated: Bool = true) {
+        openURL(url, animated: animated, insert: false)
+    }
+    
+    private func openURL(url: NSURL, animated: Bool = true, insert: Bool) {
         
         func task(completion: () -> Void) {
             state = .Running
@@ -80,9 +84,15 @@ public extension Router {
                     }
                 }
             } catch {
-                errorHandler?(error)
-                state = .NotRunning
-                completion()
+                if let handler = errorHandler {
+                    handleResponse(handler(error)) { [weak self] in
+                        self?.state = .NotRunning
+                        completion()
+                    }
+                } else {
+                    state = .NotRunning
+                    completion()
+                }
             }
         }
         
@@ -102,7 +112,11 @@ public extension Router {
             defer {
                 objc_sync_exit(self)
             }
-            queue.append(url)
+            if insert {
+                queue.insert(url, atIndex: queue.startIndex)
+            } else {
+                queue.append(url)
+            }
         case .Concurrent:
             task {}
         }
@@ -116,8 +130,8 @@ private extension Router {
         case .None:
             completion()
         case let .URL(url, animated: animated):
+            openURL(url, animated: animated, insert: true)
             completion()
-            openURL(url, animated: animated)
         case let .Async(async):
             async { [weak self] (response: Response) in
                 self?.handleResponse(response, completion: completion)
